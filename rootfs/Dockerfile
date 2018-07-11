@@ -12,11 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM alpine:3.7
+ARG target
+
+FROM alpine:3.7 as certs
+# hadolint ignore=DL3018
+RUN apk add --no-cache ca-certificates
+
+FROM $target/alpine:3.7
+COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 ARG BIN_DIR
-
-RUN apk update && apk add ca-certificates && rm -rf /var/cache/apk/*
 
 ENV HOME /tmp
 
@@ -26,4 +31,3 @@ COPY ${BIN_DIR}tiller /bin/tiller
 EXPOSE 44134
 USER nobody
 ENTRYPOINT ["/bin/tiller"]
-
