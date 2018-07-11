@@ -2,22 +2,25 @@ DOCKER_REGISTRY   ?= gcr.io
 IMAGE_PREFIX      ?= kubernetes-helm
 SHORT_NAME        ?= tiller
 SHORT_NAME_RUDDER ?= rudder
-TARGETS           ?= darwin/amd64 linux/amd64 linux/386 linux/arm linux/arm64 linux/ppc64le linux/s390x windows/amd64
-TARGETS_DOCKER    ?= amd64 arm arm64 ppc64le s390x
+# TARGETS           ?= darwin/amd64 linux/amd64 linux/386 linux/arm linux/arm64 linux/ppc64le linux/s390x windows/amd64
+# TARGETS_DOCKER    ?= amd64 arm arm64 ppc64le s390x
+TARGETS           ?= linux/amd64 linux/arm64
+TARGETS_DOCKER    ?= amd64 arm64v8
 DIST_DIRS         = find * -type d -exec
 APP               = helm
 
 # go option
-GO        ?= go
-PKG       := $(shell glide novendor)
-TAGS      :=
-TESTS     := .
-TESTFLAGS :=
-LDFLAGS   := -w -s
-GOFLAGS   :=
-BINDIR    := $(CURDIR)/bin
-BINARIES  := helm tiller
-GO_ARCH   := amd64
+GO          ?= go
+PKG         := $(shell glide novendor)
+TAGS        :=
+TESTS       := .
+TESTFLAGS   :=
+LDFLAGS     := -w -s
+GOFLAGS     :=
+BINDIR      := $(CURDIR)/bin
+BINARIES    := helm tiller
+GO_ARCH     := amd64
+DOCKER_ARCH := amd64
 
 # Required for globs to work correctly
 SHELL=/bin/bash
@@ -83,22 +86,24 @@ docker-build-experimental: check-docker docker-binary docker-binary-rudder
 	docker build --rm -t ${IMAGE_RUDDER} rootfs -f rootfs/Dockerfile.rudder
 	docker tag ${IMAGE_RUDDER} ${MUTABLE_IMAGE_RUDDER}
 
-.PHONY: docker-cross-binary
-docker-cross-binary:
-	for target in $(TARGETS_DOCKER); do \
-		echo "Building binaries for arch $$target" ; \
-		mkdir -p rootfs/bin ; \
-		GOOS=linux GOARCH=$$target CGO_ENABLED=0 $(GO) build -o rootfs/bin/$$target/helm $(GOFLAGS) -tags '$(TAGS)' -ldflags '$(LDFLAGS)' k8s.io/helm/cmd/helm ; \
-		GOOS=linux GOARCH=$$target CGO_ENABLED=0 $(GO) build -o rootfs/bin/$$target/tiller $(GOFLAGS) -tags '$(TAGS)' -ldflags '$(LDFLAGS)' k8s.io/helm/cmd/tiller ; \
-	done
+# .PHONY: docker-cross-binary
+# docker-cross-binary: build-cross
+	# for target in $(TARGETS_DOCKER); do \
+	# 	echo "Building binaries for arch $$target" ; \
+	# 	mkdir -p rootfs/bin ; \
+	# 	GOOS=linux GOARCH=$$target CGO_ENABLED=0 $(GO) build -o rootfs/bin/$$target/helm $(GOFLAGS) -tags '$(TAGS)' -ldflags '$(LDFLAGS)' k8s.io/helm/cmd/helm ; \
+	# 	GOOS=linux GOARCH=$$target CGO_ENABLED=0 $(GO) build -o rootfs/bin/$$target/tiller $(GOFLAGS) -tags '$(TAGS)' -ldflags '$(LDFLAGS)' k8s.io/helm/cmd/tiller ; \
+	# done
 
 .PHONY: docker-build-images
-docker-build-images: check-docker docker-cross-binary
+docker-build-images: check-docker build-cross
 	for target in $(TARGETS_DOCKER); do \
 		IMAGE=$(shell echo '$(IMAGE)' | sed 's/-[^:-]*:/-$$target:/g') ; \
 		MUTABLE_IMAGE=$(shell echo '$(MUTABLE_IMAGE)' | sed 's/-[^:-]*:/-$$target:/g') ; \
-		docker build --rm --build-arg BIN_DIR=bin/$$target/ -t $$IMAGE rootfs; \
-	        docker tag $$IMAGE $$MUTABLE_IMAGE; \
+		echo "$(IMAGE)" ; \
+		echo "$(MUTABLE_IMAGE)" ; \
+		echo "$$target" ; \
+		docker build --rm --build-arg target=$$target --build-arg BIN_DIR=_dist/linux-$$target/ -t $$IMAGE . ; \
 	done
 
 .PHONY: test
