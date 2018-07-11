@@ -2,12 +2,11 @@ DOCKER_REGISTRY   ?= gcr.io
 IMAGE_PREFIX      ?= kubernetes-helm
 SHORT_NAME        ?= tiller
 SHORT_NAME_RUDDER ?= rudder
+TARGETS           ?=  linux/amd64 linux/arm64 linux/arm
 # TARGETS           ?= darwin/amd64 linux/amd64 linux/386 linux/arm linux/arm64 linux/ppc64le linux/s390x windows/amd64
-# TARGETS_DOCKER    ?= amd64 arm arm64 ppc64le s390x
-TARGETS           ?= linux/amd64 linux/arm64
-TARGETS_DOCKER    ?= amd64 arm64v8
+TARGETS_DOCKER    ?= amd64 arm32v6 arm64v8
 DIST_DIRS         = find * -type d -exec
-APP               = helm
+APPS              = helm tiller
 
 # go option
 GO          ?= go
@@ -36,7 +35,14 @@ build:
 .PHONY: build-cross
 build-cross: LDFLAGS += -extldflags "-static"
 build-cross:
-	CGO_ENABLED=0 gox -parallel=3 -output="_dist/{{.OS}}-{{.Arch}}/{{.Dir}}" -osarch='$(TARGETS)' $(GOFLAGS) $(if $(TAGS),-tags '$(TAGS)',) -ldflags '$(LDFLAGS)' k8s.io/helm/cmd/$(APP)
+	for app in $(APPS); do \
+		CGO_ENABLED=0 gox -parallel=3 -output="_dist/{{.OS}}-{{.Arch}}/{{.Dir}}" \
+			-osarch='$(TARGETS)' $(GOFLAGS) $(if $(TAGS),-tags '$(TAGS)',) \
+			-ldflags '$(LDFLAGS)' k8s.io/helm/cmd/$$app ; \
+	done
+
+.PHONY: build-multiarch
+build-multiarch: build-cross
 
 .PHONY: dist
 dist:
@@ -86,28 +92,13 @@ docker-build-experimental: check-docker docker-binary docker-binary-rudder
 	docker build --rm -t ${IMAGE_RUDDER} rootfs -f rootfs/Dockerfile.rudder
 	docker tag ${IMAGE_RUDDER} ${MUTABLE_IMAGE_RUDDER}
 
-# .PHONY: docker-cross-binary
-# docker-cross-binary: build-cross
-# 	for target in $(TARGETS_DOCKER); do \
-# 		echo "Building binaries for arch $$target" ; \
-# 		mkdir -p rootfs/bin ; \
-# 		GOOS=linux GOARCH=$$target CGO_ENABLED=0 $(GO) build -o rootfs/bin/$$target/helm $(GOFLAGS) -tags '$(TAGS)' -ldflags '$(LDFLAGS)' k8s.io/helm/cmd/helm ; \
-# 		GOOS=linux GOARCH=$$target CGO_ENABLED=0 $(GO) build -o rootfs/bin/$$target/tiller $(GOFLAGS) -tags '$(TAGS)' -ldflags '$(LDFLAGS)' k8s.io/helm/cmd/tiller ; \
-# 	done
-
 .PHONY: docker-build-images
-docker-build-images: check-docker build-cross
-	make APP=helm build-cross ; \
-	make APP=tiller build-cross ; \
+docker-build-multiarch: check-docker build-cross
 	for target in $(TARGETS_DOCKER); do \
 		IMAGE=$(shell echo '$(IMAGE)' | sed 's/-[^:-]*:/-$$target:/g') ; \
 		MUTABLE_IMAGE=$(shell echo '$(MUTABLE_IMAGE)' | sed 's/-[^:-]*:/-$$target:/g') ; \
 		TARGETS="$(TARGETS_DOCKER)" IMAGE="$(IMAGE)" MUTABLE_IMAGE="$(MUTABLE_IMAGE)" scripts/build-docker.sh ; \
 	done
-		# docker build --rm --build-arg TARGET=$$target --build-arg BIN_DIR=_dist/linux-$$target/ -t $$IMAGE . ; \
-	# @IMAGE=$(shell echo $IMAGE | sed 's/-[^:-]*:/-$$target:/g')
-	# @MUTABLE_IMAGE=$(shell echo $MUTABLE_IMAGE | sed 's/-[^:-]*:/-$$target:/g')
-	# @TARGETS="$(TARGETS_DOCKER)" IMAGE="$(IMAGE)" MUTABLE_IMAGE="$(MUTABLE_IMAGE)" scripts/build-docker.sh
 
 .PHONY: test
 test: build
