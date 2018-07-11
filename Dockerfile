@@ -26,8 +26,7 @@ COPY --from=certs \
 
 ARG BIN_DIR
 
-COPY ${BIN_DIR}helm /bin/helm
-COPY ${BIN_DIR}tiller /bin/tiller
+COPY ${BIN_DIR}/helm ${BIN_DIR}/tiller /bin/
 
 EXPOSE 44134
 USER nobody

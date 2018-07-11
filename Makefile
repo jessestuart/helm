@@ -88,23 +88,26 @@ docker-build-experimental: check-docker docker-binary docker-binary-rudder
 
 # .PHONY: docker-cross-binary
 # docker-cross-binary: build-cross
-	# for target in $(TARGETS_DOCKER); do \
-	# 	echo "Building binaries for arch $$target" ; \
-	# 	mkdir -p rootfs/bin ; \
-	# 	GOOS=linux GOARCH=$$target CGO_ENABLED=0 $(GO) build -o rootfs/bin/$$target/helm $(GOFLAGS) -tags '$(TAGS)' -ldflags '$(LDFLAGS)' k8s.io/helm/cmd/helm ; \
-	# 	GOOS=linux GOARCH=$$target CGO_ENABLED=0 $(GO) build -o rootfs/bin/$$target/tiller $(GOFLAGS) -tags '$(TAGS)' -ldflags '$(LDFLAGS)' k8s.io/helm/cmd/tiller ; \
-	# done
+# 	for target in $(TARGETS_DOCKER); do \
+# 		echo "Building binaries for arch $$target" ; \
+# 		mkdir -p rootfs/bin ; \
+# 		GOOS=linux GOARCH=$$target CGO_ENABLED=0 $(GO) build -o rootfs/bin/$$target/helm $(GOFLAGS) -tags '$(TAGS)' -ldflags '$(LDFLAGS)' k8s.io/helm/cmd/helm ; \
+# 		GOOS=linux GOARCH=$$target CGO_ENABLED=0 $(GO) build -o rootfs/bin/$$target/tiller $(GOFLAGS) -tags '$(TAGS)' -ldflags '$(LDFLAGS)' k8s.io/helm/cmd/tiller ; \
+# 	done
 
 .PHONY: docker-build-images
 docker-build-images: check-docker build-cross
+	make APP=helm build-cross ; \
+	make APP=tiller build-cross ; \
 	for target in $(TARGETS_DOCKER); do \
 		IMAGE=$(shell echo '$(IMAGE)' | sed 's/-[^:-]*:/-$$target:/g') ; \
 		MUTABLE_IMAGE=$(shell echo '$(MUTABLE_IMAGE)' | sed 's/-[^:-]*:/-$$target:/g') ; \
-		echo "$(IMAGE)" ; \
-		echo "$(MUTABLE_IMAGE)" ; \
-		echo "$$target" ; \
-		docker build --rm --build-arg target=$$target --build-arg BIN_DIR=_dist/linux-$$target/ -t $$IMAGE . ; \
+		TARGETS="$(TARGETS_DOCKER)" IMAGE="$(IMAGE)" MUTABLE_IMAGE="$(MUTABLE_IMAGE)" scripts/build-docker.sh ; \
 	done
+		# docker build --rm --build-arg TARGET=$$target --build-arg BIN_DIR=_dist/linux-$$target/ -t $$IMAGE . ; \
+	# @IMAGE=$(shell echo $IMAGE | sed 's/-[^:-]*:/-$$target:/g')
+	# @MUTABLE_IMAGE=$(shell echo $MUTABLE_IMAGE | sed 's/-[^:-]*:/-$$target:/g')
+	# @TARGETS="$(TARGETS_DOCKER)" IMAGE="$(IMAGE)" MUTABLE_IMAGE="$(MUTABLE_IMAGE)" scripts/build-docker.sh
 
 .PHONY: test
 test: build
